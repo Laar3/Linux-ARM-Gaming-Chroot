@@ -1,6 +1,6 @@
 #!/bin/sh
 # Detect whether the user has doas or sudo
-if [ -e /etc/doas.conf ]; then
+if [ -e /etc/doas.conf ] || [ -d /etc/doas.d ]; then
   root=doas
 else
   root=sudo
@@ -17,6 +17,7 @@ install_chroot(){
   # TODO, pmos support (might need some changes to other parts of the script aswell.)
   [ -d /etc/pacman.d ] && $root pacman -S debootstrap debian-archive-keyring xorg-xhost xorg-server-xephyr --needed --noconfirm
   [ -d /etc/apt/sources.list ] && $root apt-get -y install deboostrap debian-archive-keyring x11-xserver-utils
+  [ -d /etc/apk ] && $root apk add debootstrap xhost
   xhost +local:
   # create chroot
 $root debootstrap --arch armhf --components=main,universe sid $GAMING_CHROOT https://deb.debian.org/debian
@@ -31,7 +32,7 @@ $root debootstrap --arch armhf --components=main,universe sid $GAMING_CHROOT htt
   $root mount -t tmpfs tmpfs tmp/
   #TODO there may be a better way to do this but for now its needed to make internet work reliably, maybe a symlink
   $root cp /etc/resolv.conf etc/resolv.conf
-  $root chroot . <<EOF
+  $root chroot . /bin/bash -i <<EOF
 apt-get -y install foot stterm
 
 dpkg --add-architecture arm64 
@@ -79,8 +80,12 @@ apt-get -y install ./box*.deb
 
 EOF
 $root cp -r $GAMING_CHROOT/etc/binfmt.d/box* /etc/binfmt.d/
-$root systemctl restart systemd-binfmt
-$root chroot . <<EOF
+if [ -d /etc/apk ]; then
+  $root rc-service restart binfmt
+else
+  $root systemctl restart systemd-binfmt
+fi
+$root chroot . /bin/bash -i <<EOF
 cd /tmp
 wget http://ftp.debian.org/debian/pool/main/libi/libindicator/libindicator7_0.5.0-4_armhf.deb
 wget http://ftp.debian.org/debian/pool/main/liba/libappindicator/libappindicator1_0.4.92-7_armhf.deb
